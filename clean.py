@@ -8,6 +8,45 @@ OUTPUT = ROOT / "results"
 TARGETS = ["casual", "registered"]
 
 
+def repair_humidity(data):
+    """Flag implausible zero humidity and replace it by time interpolation."""
+    data = data.copy()
+    invalid = data["hum"].eq(0)
+    data["hum_imputed"] = invalid.astype("int8")
+    data.loc[invalid, "hum"] = pd.NA
+
+    # Interpolate only the environmental feature, never the rental targets.
+    humidity = data.set_index("timestamp")["hum"].interpolate(
+        method="time", limit_direction="both"
+    )
+    data["hum"] = data["timestamp"].map(humidity)
+    print(f"Imputed zero-humidity records: {invalid.sum():,}")
+    return data
+
+
+def make_complete_hourly_grid(data, hours):
+    """Create an audit grid while leaving unknown rentals and weather as NaN."""
+    complete = data.set_index("timestamp").reindex(hours)
+    complete.index.name = "timestamp"
+    complete["is_observed"] = complete["cnt"].notna().astype("int8")
+
+    # These fields are known from the timestamp or from another hour on the
+    # same date. Weather and rental values are intentionally not fabricated.
+    complete["hr"] = complete.index.hour
+    date_columns = [
+        "season", "yr", "mnth", "holiday", "weekday", "workingday"
+    ]
+    dates = data["timestamp"].dt.normalize()
+    for column in date_columns:
+        daily_values = data.groupby(dates)[column].first()
+        missing = complete[column].isna()
+        complete.loc[missing, column] = complete.index[missing].normalize().map(
+            daily_values
+        )
+
+    return complete.reset_index()
+
+
 def main():
     raw = pd.read_csv(ROOT / "hour.csv")
     print(f"Raw rows: {len(raw):,}")
@@ -33,14 +72,18 @@ def main():
     if not (data[TARGETS].sum(axis=1) == data["cnt"]).all():
         raise ValueError("Casual and registered counts must add up to cnt.")
 
+    data = repair_humidity(data)
+
     hours = pd.date_range(data["timestamp"].min(), data["timestamp"].max(), freq="h")
     missing_hours = hours.difference(data["timestamp"])
+    complete = make_complete_hourly_grid(data, hours)
     print(f"Missing hourly records: {len(missing_hours):,}")
     print(data[TARGETS].describe().round(2))
     print(data.groupby("weathersit")[TARGETS].agg(["size", "mean"]).round(2))
 
     OUTPUT.mkdir(exist_ok=True)
     data.to_csv(OUTPUT / "clean_hourly.csv", index=False)
+    complete.to_csv(OUTPUT / "complete_hourly.csv", index=False)
     pd.Series(missing_hours, name="timestamp").to_csv(
         OUTPUT / "missing_hours.csv", index=False
     )
