@@ -42,7 +42,7 @@ The data were divided chronologically:
 - **Training:** 14,491 rows, January 2011–August 2012.
 - **Testing:** 2,888 rows, September–December 2012.
 
-The first experiment compared a historical average, Ridge regression, and squared-error Gradient Boosting. Gradient Boosting clearly performed best, confirming that bike demand contains important nonlinear relationships.
+The initial experiment compared the historical-average baseline, Ridge regression, and squared-error Histogram Gradient Boosting. In the September–December 2012 test period, Boosting achieved the lowest RMSE for both casual and registered riders.
 
 The second experiment removed `atemp` because it was almost perfectly correlated with `temp` (correlation **0.9877**). It then compared squared-error, Poisson, and log-target Gradient Boosting using expanding-window validation.
 
@@ -56,8 +56,8 @@ Following the expanding-window validation rule implemented in the code, the fina
 | Registered: squared-error Boosting | 0.606 | **0.876** | 45.260 | 65.532 | 43.87% |
 | Validation-selected total | 0.595 | **0.880** | 51.976 | 75.256 | 45.67% |
 
-These models were selected because they achieved the lowest mean validation RMSE before the test period. Poisson Boosting had the strongest observed test result (total R² = 0.892), but it remains a candidate that should be confirmed on new future data rather than being selected retrospectively from the test set.
+We selected one model per rider group based on the lowest mean RMSE across the three expanding validation windows.
 
 ## Final conclusion
 
-The project produced a clean, time-ordered dataset, identified clear differences between casual and registered behavior, and developed forecasting models that substantially outperform the historical baseline. The validation-selected model combination explains approximately **88.0% of total test-period demand variation**. No additional tuning should be performed on the same test set; Poisson and any other future improvements should be evaluated using newly collected time periods.
+For Check-in 1, we prepared the hourly rental data and identified distinct demand patterns for casual and registered riders. Combining the two selected models reduced total hourly rental RMSE by 45.67% compared with the historical-average baseline. In the next phase, we will use these forecasts to compare simulated bike deployment plans based on the historical baseline and the selected models.
